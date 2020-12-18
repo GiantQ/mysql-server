@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2020, Oracle and/or its affiliates. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2.0,
@@ -28,12 +28,12 @@
 #include "plugin/x/ngs/include/ngs/scheduler.h"
 #include "plugin/x/src/document_id_aggregator.h"
 #include "plugin/x/src/interface/client.h"
+#include "plugin/x/src/interface/server.h"
 #include "plugin/x/src/notices.h"
 #include "plugin/x/src/sql_data_context.h"
 #include "plugin/x/src/xpl_dispatcher.h"
 #include "plugin/x/src/xpl_error.h"
 #include "plugin/x/src/xpl_log.h"
-#include "plugin/x/src/xpl_server.h"
 
 namespace xpl {
 
@@ -52,6 +52,10 @@ Session::~Session() {
 
   if (m_failed_auth_count > 0 && !m_was_authenticated)
     ++Global_status_variables::instance().m_rejected_sessions_count;
+
+  if (state_before_close() != xpl::iface::Session::State::k_authenticating) {
+    ++Global_status_variables::instance().m_closed_sessions_count;
+  }
 }
 
 // handle a message while in Ready state
@@ -70,7 +74,16 @@ bool Session::handle_ready_message(const ngs::Message_request &command) {
   if (ngs::Session::handle_ready_message(command)) return true;
 
   try {
-    return m_dispatcher.execute(command);
+    const auto error = m_dispatcher.execute(command);
+    switch (error.severity) {
+      case ngs::Error_code::OK:
+        return true;
+      case ngs::Error_code::ERROR:
+        return error.error != ER_UNKNOWN_COM_ERROR;
+      case ngs::Error_code::FATAL:
+        on_close();
+        return true;
+    }
   } catch (ngs::Error_code &err) {
     m_encoder->send_result(err);
     on_close();
@@ -102,8 +115,7 @@ void Session::on_kill() {
   on_close(true);
 }
 
-void Session::on_auth_success(
-    const iface::Authentication::Response &response) {
+void Session::on_auth_success(const iface::Authentication::Response &response) {
   proto().send_notice_client_id(m_client->client_id_num());
   ngs::Session::on_auth_success(response);
 

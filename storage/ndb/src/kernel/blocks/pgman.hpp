@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2005, 2019, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2005, 2020, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -259,7 +259,7 @@ class Pgman : public SimulatedBlock
 {
 public:
   Pgman(Block_context& ctx, Uint32 instanceNumber = 0);
-  virtual ~Pgman();
+  ~Pgman() override;
 
   /* Special function to indicate the block is the extra PGMAN worker */
   void init_extra_pgman();
@@ -778,6 +778,8 @@ protected:
   void execDATA_FILE_ORD(Signal*);
 
   void execDBINFO_SCANREQ(Signal*);
+public:
+  bool idle_fragment_lcp(Uint32 tableId, Uint32 fragmentId); 
 
 private:
   static Uint32 get_sublist_no(Page_state state);

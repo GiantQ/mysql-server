@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2011, 2019, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2011, 2020, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -36,7 +36,6 @@
 #include "storage/ndb/plugin/ndb_log.h"
 #include "storage/ndb/plugin/ndb_schema_trans_guard.h"
 #include "storage/ndb/plugin/ndb_table_guard.h"
-#include "storage/ndb/plugin/ndb_tdc.h"
 #include "storage/ndb/plugin/ndb_thd.h"
 #include "template_utils.h"
 
@@ -174,26 +173,8 @@ const char *lex2str(const LEX_CSTRING &str, char (&buf)[buf_size]) {
   return buf;
 }
 
-static void ndb_fk_casedn(char *name) {
-  DBUG_ASSERT(name != 0);
-  uint length = (uint)strlen(name);
-  DBUG_ASSERT(files_charset_info != 0 &&
-              files_charset_info->casedn_multiply == 1);
-  files_charset_info->cset->casedn(files_charset_info, name, length, name,
-                                   length);
-}
-
-static int ndb_fk_casecmp(const char *name1, const char *name2) {
-  if (!lower_case_table_names) {
-    return strcmp(name1, name2);
-  }
-  char tmp1[FN_LEN + 1];
-  char tmp2[FN_LEN + 1];
-  strcpy(tmp1, name1);
-  strcpy(tmp2, name2);
-  ndb_fk_casedn(tmp1);
-  ndb_fk_casedn(tmp2);
-  return strcmp(tmp1, tmp2);
+inline static int ndb_fk_casecmp(const char *name1, const char *name2) {
+  return my_strcasecmp(files_charset_info, name1, name2);
 }
 
 extern bool ndb_show_foreign_key_mock_tables(THD *thd);
@@ -926,7 +907,6 @@ class Fk_util {
     This can be called either by ha_ndbcluster::get_error_message
     or ha_ndbcluster:get_foreign_key_create_info.
 
-    @param    thd               Current thread.
     @param    ndb               Pointer to the Ndb Object
     @param    fk                The foreign key object whose info
                                 has to be printed.
@@ -1292,30 +1272,6 @@ int ndb_fk_util_rename_foreign_keys(THD *thd, NdbDictionary::Dictionary *dict,
                                      new_db_name, new_table_name);
 }
 
-/**
-  @brief Flush the parent table after a successful addition/deletion
-         to the Foreign Key. This is done to force reload the Parent
-         table's metadata.
-
-  @param thd            thread handle
-  @param parent_db      Parent table's database name
-  @param parent_name    Parent table's name
-  @return Void
-*/
-static void flush_parent_table_for_fk(THD *thd, const char *parent_db,
-                                      const char *parent_name) {
-  DBUG_TRACE;
-
-  if (Fk_util::is_mock_name(parent_name)) {
-    /* Parent table is mock - no need to flush */
-    DBUG_PRINT("debug", ("Parent table is a mock - skipped flushing"));
-    return;
-  }
-
-  DBUG_PRINT("debug", ("Flushing table : `%s`.`%s` ", parent_db, parent_name));
-  ndb_tdc_close_cached_table(thd, parent_db, parent_name);
-}
-
 /*
   @brief Guard class for references to indexes in the global
   NdbApi dictionary cache which need to be released(and sometimes
@@ -1436,10 +1392,6 @@ int ha_ndbcluster::create_fks(THD *thd, Ndb *ndb) {
     } else {
       parent_name[0] = 0;
     }
-    if (lower_case_table_names) {
-      ndb_fk_casedn(parent_db);
-      ndb_fk_casedn(parent_name);
-    }
     setDbName(ndb, parent_db);
     Ndb_table_guard parent_tab(dict, parent_name);
     if (parent_tab.get_table() == 0) {
@@ -1559,7 +1511,6 @@ int ha_ndbcluster::create_fks(THD *thd, Ndb *ndb) {
     DBUG_ASSERT(fk->name.str && fk->name.length);
 
     lex2str(fk->name, fk_name);
-    if (lower_case_table_names) ndb_fk_casedn(fk_name);
 
     ndbfk.setName(fk_name);
     ndbfk.setParent(*parent_tab.get_table(), parent_index, parentcols);
@@ -1617,13 +1568,6 @@ int ha_ndbcluster::create_fks(THD *thd, Ndb *ndb) {
     const int err = dict->createForeignKey(ndbfk, &objid, flags);
     if (err) {
       return Fk_util::create_failed(ndbfk.getName(), dict->getNdbError());
-    }
-
-    /* Flush the parent table out if parent is different from child */
-    if (parent_tab.get_table()->getObjectId() !=
-        child_tab.get_table()->getObjectId()) {
-      /* flush parent table */
-      flush_parent_table_for_fk(thd, parent_db, parent_name);
     }
   }
 
@@ -1855,13 +1799,6 @@ int ha_ndbcluster::inplace__drop_fks(THD *thd, Ndb *ndb, NDBDICT *dict,
           ERR_RETURN(dict->getNdbError());
         }
 
-        /* Flush the parent table out if parent is different from child */
-        if (ndb_fk_casecmp(fk.getParentTable(), fk.getChildTable()) != 0) {
-          char parent_db[FN_LEN + 1];
-          const char *parent_name =
-              fk_split_name(parent_db, fk.getParentTable());
-          flush_parent_table_for_fk(thd, parent_db, parent_name);
-        }
         break;
       }
     }
@@ -1983,25 +1920,16 @@ int ha_ndbcluster::recreate_fk_for_truncate(THD *thd, Ndb *ndb,
     if (err) {
       ERR_RETURN(dict->getNdbError());
     }
-
-    /* Flush the parent table out if parent is different from child */
-    char parent_db[FN_LEN + 1];
-    const char *parent_name = fk_split_name(parent_db, fk.getParentTable());
-    if (ndb_fk_casecmp(parent_name, tab_name) != 0 ||
-        ndb_fk_casecmp(parent_db, ndb->getDatabaseName()) != 0) {
-      flush_parent_table_for_fk(thd, parent_db, parent_name);
-    }
   }
   return 0;
 }
 
 bool ha_ndbcluster::has_fk_dependency(
-    THD *thd, const NdbDictionary::Column *column) const {
+    NdbDictionary::Dictionary *dict,
+    const NdbDictionary::Column *column) const {
   DBUG_TRACE;
-  Ndb *ndb = get_ndb(thd);
-  NDBDICT *dict = ndb->getDictionary();
+  DBUG_PRINT("enter", ("Searching for column %s", column->getName()));
   NdbDictionary::Dictionary::List obj_list;
-  DBUG_PRINT("info", ("Searching for column %s", column->getName()));
   if (dict->listDependentObjects(obj_list, *m_table) == 0) {
     for (unsigned i = 0; i < obj_list.count; i++) {
       const NDBDICT::List::Element &e = obj_list.elements[i];

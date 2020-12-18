@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2019, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2020, Oracle and/or its affiliates. All rights reserved.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -35,6 +35,7 @@
 #include <NdbOut.hpp>
 #include <WatchDog.hpp>
 #include <NdbConfig.h>
+#include <NdbSpin.h>
 
 #include <mgmapi_configuration.hpp>
 #include <kernel_config_parameters.h>
@@ -217,18 +218,21 @@ Configuration::fetch_configuration(const char* _connect_string,
   {
     Uint32 generation;
     ndb_mgm_configuration_iterator sys_iter(*p, CFG_SECTION_SYSTEM);
+    char buf[512];
+    char* sockaddr_string =
+        Ndb_combine_address_port(buf, sizeof(buf),
+        m_config_retriever->get_mgmd_host(),
+        m_config_retriever->get_mgmd_port());
+
     if (sys_iter.get(CFG_SYS_CONFIG_GENERATION, &generation))
     {
-      g_eventLogger->info("Configuration fetched from '%s:%d', unknown generation!! (likely older ndb_mgmd)",
-                          m_config_retriever->get_mgmd_host(),
-                          m_config_retriever->get_mgmd_port());
+        g_eventLogger->info("Configuration fetched from '%s', unknown generation!!"
+                            " (likely older ndb_mgmd)", sockaddr_string);
     }
     else
     {
-      g_eventLogger->info("Configuration fetched from '%s:%d', generation: %d",
-                          m_config_retriever->get_mgmd_host(),
-                          m_config_retriever->get_mgmd_port(),
-                          generation);
+        g_eventLogger->info("Configuration fetched from '%s', generation: %d",
+                            sockaddr_string, generation);
     }
   }
 
@@ -364,8 +368,17 @@ Configuration::setupConfiguration(){
   _schedulerExecutionTimer = 50;
   iter.get(CFG_DB_SCHED_EXEC_TIME, &_schedulerExecutionTimer);
 
-  _schedulerSpinTimer = 0;
+  _schedulerSpinTimer = DEFAULT_SPIN_TIME;
   iter.get(CFG_DB_SCHED_SPIN_TIME, &_schedulerSpinTimer);
+  /* Always set SchedulerSpinTimer to 0 on platforms not supporting spin */
+  if (!NdbSpin_is_supported())
+  {
+    _schedulerSpinTimer = 0;
+  }
+  g_eventLogger->info("SchedulerSpinTimer = %u", _schedulerSpinTimer);
+
+  _spinTimePerCall = 1000;
+  iter.get(CFG_DB_SPIN_TIME_PER_CALL, &_spinTimePerCall);
 
   _maxSendDelay = 0;
   iter.get(CFG_DB_MAX_SEND_DELAY, &_maxSendDelay);
@@ -583,6 +596,11 @@ void
 Configuration::schedulerExecutionTimer(int value) {
   if (value < 11000)
     _schedulerExecutionTimer = value;
+}
+
+Uint32
+Configuration::spinTimePerCall() const {
+  return _spinTimePerCall;
 }
 
 int 

@@ -262,6 +262,7 @@ ANALYZE TABLE t1;
 explain select * from t1 where a >= 1 and a < 3 and b >0 order by a desc,b desc;
 flush status;
 select * from t1 where a >= 1 and a < 3 and b >0 order by a desc,b desc;
+--skip_if_hypergraph  # Depends on the query plan.
 show status like 'handler_read%';
 drop table t1;
 
@@ -600,6 +601,7 @@ let $query= SELECT t1.pk, t2.col_int_key,
 
 --replace_column 10 # 11 #
 eval EXPLAIN $query;
+--sorted_result
 eval $query;
 
 let $query= SELECT STRAIGHT_JOIN t1.pk, t2.col_int_key,
@@ -899,6 +901,10 @@ eval $query;
 ALTER TABLE t1 ADD INDEX key1 (pk);
 ALTER TABLE t1 ADD INDEX key2 (col_int_key);
 
+ANALYZE TABLE t1;
+
+let $query=SELECT * FROM t1 FORCE INDEX (key1,col_int_key) WHERE pk IN (6,2)
+                               OR (col_int_key >= 7 AND col_int_key < 13);
 eval EXPLAIN $query;
 eval $query;
 

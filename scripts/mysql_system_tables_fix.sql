@@ -1,4 +1,4 @@
--- Copyright (c) 2003, 2019, Oracle and/or its affiliates. All rights reserved.
+-- Copyright (c) 2003, 2020, Oracle and/or its affiliates. All rights reserved.
 --
 -- This program is free software; you can redistribute it and/or modify
 -- it under the terms of the GNU General Public License, version 2.0,
@@ -618,10 +618,17 @@ FROM mysql.user WHERE super_priv = 'Y' AND @hadXARecoverAdminPriv = 0;
 COMMIT;
 
 -- Add the privilege CLONE_ADMIN for every user who has the privilege SUPER
--- provided that there isn't a user who already has the privilige CLONE_ADMIN.
+-- provided that there isn't a user who already has the privilege CLONE_ADMIN.
 SET @hadCloneAdminPriv = (SELECT COUNT(*) FROM global_grants WHERE priv = 'CLONE_ADMIN');
 INSERT INTO global_grants SELECT user, host, 'CLONE_ADMIN', IF(grant_priv = 'Y', 'Y', 'N')
 FROM mysql.user WHERE super_priv = 'Y' AND @hadCloneAdminPriv = 0;
+COMMIT;
+
+-- Add the privilege INNODB_REDO_LOG_ENABLE for every user who has the privilege SUPER
+-- provided that there isn't a user who already has the privilege INNODB_REDO_LOG_ENABLE.
+SET @hadRedoLogEnablePriv = (SELECT COUNT(*) FROM global_grants WHERE priv = 'INNODB_REDO_LOG_ENABLE');
+INSERT INTO global_grants SELECT user, host, 'INNODB_REDO_LOG_ENABLE', IF(grant_priv = 'Y', 'Y', 'N')
+FROM mysql.user WHERE super_priv = 'Y' AND @hadRedoLogEnablePriv = 0;
 COMMIT;
 
 -- Add the privilege BACKUP_ADMIN for every user who has the privilege RELOAD
@@ -774,6 +781,20 @@ FROM mysql.user WHERE super_priv = 'Y' AND @hadTableEncryptionAdminPriv = 0 AND 
 DELETE FROM global_grants WHERE user = 'mysql.session' AND host = 'localhost' AND priv = 'TABLE_ENCRYPTION_ADMIN';
 COMMIT;
 
+-- Add the privilege REPLICATION_APPLIER for every user who has the privilege SUPER
+-- provided that there isn't a user who already has the privilige REPLICATION_APPLIER.
+SET @hadReplicationApplierPriv = (SELECT COUNT(*) FROM global_grants WHERE priv = 'REPLICATION_APPLIER');
+INSERT INTO global_grants SELECT user, host, 'REPLICATION_APPLIER', IF(grant_priv = 'Y', 'Y', 'N')
+FROM mysql.user WHERE super_priv = 'Y' AND @hadReplicationApplierPriv = 0;
+COMMIT;
+
+-- Add the privilege SHOW_ROUTINE for every user who has global SELECT privilege
+-- provided that there isn't a user who already has the privilege SHOW_ROUTINE
+SET @hadShowRoutinePriv = (SELECT COUNT(*) FROM global_grants WHERE priv = 'SHOW_ROUTINE');
+INSERT INTO global_grants SELECT user, host, 'SHOW_ROUTINE', IF(grant_priv = 'Y', 'Y', 'N')
+FROM mysql.user WHERE select_priv = 'Y' AND @hadShowRoutinePriv = 0 AND user NOT IN ('mysql.infoschema','mysql.session','mysql.sys');
+COMMIT;
+
 # Activate the new, possible modified privilege tables
 # This should not be needed, but gives us some extra testing that the above
 # changes was correct
@@ -783,6 +804,7 @@ ALTER TABLE slave_master_info ADD Ssl_crlpath TEXT CHARACTER SET utf8 COLLATE ut
 ALTER TABLE slave_master_info STATS_PERSISTENT=0;
 ALTER TABLE slave_worker_info STATS_PERSISTENT=0;
 ALTER TABLE slave_relay_log_info STATS_PERSISTENT=0;
+ALTER TABLE replication_asynchronous_connection_failover STATS_PERSISTENT=0;
 ALTER TABLE gtid_executed STATS_PERSISTENT=0;
 
 #
@@ -826,6 +848,8 @@ ALTER TABLE slave_master_info ADD Master_compression_algorithm CHAR(64) CHARACTE
 
 ALTER TABLE slave_master_info ADD Tls_ciphersuites TEXT CHARACTER SET utf8 COLLATE utf8_bin DEFAULT NULL COMMENT 'Ciphersuites used for TLS 1.3 communication with the master server.';
 
+ALTER TABLE slave_master_info ADD Source_connection_auto_failover BOOLEAN NOT NULL DEFAULT FALSE COMMENT 'Indicates whether the channel connection failover is enabled.';
+
 # If the order of column Public_key_path, Get_public_key is wrong, this will correct the order in
 # slave_master_info table.
 ALTER TABLE slave_master_info
@@ -845,6 +869,11 @@ ALTER TABLE slave_master_info
   COMMENT 'Ciphersuites used for TLS 1.3 communication with the master server.'
   AFTER Master_zstd_compression_level;
 
+ALTER TABLE slave_master_info
+  MODIFY COLUMN Source_connection_auto_failover BOOLEAN NOT NULL DEFAULT FALSE
+  COMMENT 'Indicates whether the channel connection failover is enabled.'
+  AFTER Tls_ciphersuites;
+
 # Columns added to keep information about the replication applier thread
 # privilege context user
 ALTER TABLE slave_relay_log_info ADD Privilege_checks_username CHAR(32) COLLATE utf8_bin DEFAULT NULL COMMENT 'Username part of PRIVILEGE_CHECKS_USER.' AFTER Channel_name,
@@ -860,6 +889,9 @@ ALTER TABLE slave_relay_log_info MODIFY Relay_log_name TEXT CHARACTER SET utf8 C
                                  MODIFY Sql_delay INTEGER COMMENT 'The number of seconds that the slave must lag behind the master.',
                                  MODIFY Number_of_workers INTEGER UNSIGNED,
                                  MODIFY Id INTEGER UNSIGNED COMMENT 'Internal Id that uniquely identifies this record.';
+
+# Columns added to keep information about REQUIRE_TABLE_PRIMARY_KEY_CHECK replication field
+ALTER TABLE slave_relay_log_info ADD Require_table_primary_key_check ENUM('STREAM','ON','OFF') NOT NULL DEFAULT 'STREAM' COMMENT 'Indicates what is the channel policy regarding tables having primary keys on create and alter table queries' AFTER Require_row_format;
 
 #
 # Drop legacy NDB distributed privileges function & procedures
@@ -1225,6 +1257,7 @@ ALTER TABLE mysql.time_zone_leap_second TABLESPACE = mysql;
 ALTER TABLE mysql.slave_relay_log_info TABLESPACE = mysql;
 ALTER TABLE mysql.slave_master_info TABLESPACE = mysql;
 ALTER TABLE mysql.slave_worker_info TABLESPACE = mysql;
+ALTER TABLE mysql.replication_asynchronous_connection_failover TABLESPACE = mysql;
 ALTER TABLE mysql.gtid_executed TABLESPACE = mysql;
 ALTER TABLE mysql.server_cost TABLESPACE = mysql;
 ALTER TABLE mysql.engine_cost TABLESPACE = mysql;
@@ -1293,6 +1326,7 @@ ALTER TABLE servers ROW_FORMAT=DYNAMIC;
 ALTER TABLE server_cost ROW_FORMAT=DYNAMIC;
 ALTER TABLE slave_master_info ROW_FORMAT=DYNAMIC;
 ALTER TABLE slave_worker_info ROW_FORMAT=DYNAMIC;
+ALTER TABLE replication_asynchronous_connection_failover ROW_FORMAT=DYNAMIC;
 ALTER TABLE slave_relay_log_info ROW_FORMAT=DYNAMIC;
 ALTER TABLE tables_priv ROW_FORMAT=DYNAMIC;
 ALTER TABLE time_zone ROW_FORMAT=DYNAMIC;
@@ -1301,5 +1335,9 @@ ALTER TABLE time_zone_leap_second ROW_FORMAT=DYNAMIC;
 ALTER TABLE time_zone_transition ROW_FORMAT=DYNAMIC;
 ALTER TABLE time_zone_transition_type ROW_FORMAT=DYNAMIC;
 ALTER TABLE user ROW_FORMAT=DYNAMIC;
+
+-- GRANT SYSTEM_USER ON *.* TO 'mysql.infoschema'@localhost
+INSERT IGNORE INTO global_grants (USER,HOST,PRIV,WITH_GRANT_OPTION)
+  VALUES ('mysql.infoschema','localhost','SYSTEM_USER','N');
 
 SET @@session.sql_mode = @old_sql_mode;

@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2019, Oracle and/or its affiliates. All rights reserved.
+   Copyright (c) 2003, 2020, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -637,6 +637,7 @@ public:
     Uint8 statScan;
     Uint8 m_stop_batch;
     Uint8 prioAFlag;
+    Uint8 m_first_match_flag;
   };
   STATIC_CONST(DBLQH_SCAN_RECORD_TRANSIENT_POOL_INDEX = 1);
   typedef Ptr<ScanRecord> ScanRecordPtr;
@@ -2668,7 +2669,7 @@ public:
 
 public:
   Dblqh(Block_context& ctx, Uint32 instanceNumber = 0);
-  virtual ~Dblqh();
+  ~Dblqh() override;
 
   void execLOCAL_LATEST_LCP_ID_REP(Signal*);
   void execTUPKEYCONF(Signal* signal);
@@ -3311,7 +3312,7 @@ private:
   void initData();
   void initRecords(const ndb_mgm_configuration_iterator *mgm_cfg);
 protected:
-  virtual bool getParam(const char* name, Uint32* count);
+  bool getParam(const char* name, Uint32* count) override;
 
 public:
   void checkLcpStopBlockedLab(Signal* signal, Uint32);

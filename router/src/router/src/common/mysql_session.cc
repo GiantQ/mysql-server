@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2016, 2019, Oracle and/or its affiliates. All rights reserved.
+  Copyright (c) 2016, 2020, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -444,7 +444,7 @@ mysql_ssl_mode MySQLSession::parse_ssl_mode(std::string ssl_mode) {
 
 /*static*/
 const char *MySQLSession::ssl_mode_to_string(mysql_ssl_mode ssl_mode) noexcept {
-  const char *text = NULL;
+  const char *text = nullptr;
 
   // The better way would be to do away with text variable and return kSslMode*
   // directly from each case. Unfortunately, Clang 3.4 doesn't like it:
@@ -772,7 +772,7 @@ class RealResultRow : public MySQLSession::ResultRow {
   RealResultRow(MySQLSession::Row row, MYSQL_RES *res)
       : ResultRow(std::move(row)), res_(res) {}
 
-  virtual ~RealResultRow() { mysql_free_result(res_); }
+  ~RealResultRow() override { mysql_free_result(res_); }
 
  private:
   MYSQL_RES *res_;

@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2019, Oracle and/or its affiliates. All rights reserved.
+/* Copyright (c) 2000, 2020, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -604,9 +604,9 @@ bool Protocol_classic::net_store_data_with_conversion(
   @param sql_errno The error code to send
   @param err A pointer to the error message
 
-  @return
-    @retval false The message was sent to the client
-    @retval true An error occurred and the message wasn't sent properly
+
+  @retval false The message was sent to the client
+  @retval true An error occurred and the message wasn't sent properly
 */
 
 bool net_send_error(THD *thd, uint sql_errno, const char *err) {
@@ -644,9 +644,8 @@ bool net_send_error(THD *thd, uint sql_errno, const char *err) {
   @param sql_errno  The error code to send
   @param err        A pointer to the error message
 
-  @return
-    @retval false The message was sent to the client
-    @retval true  An error occurred and the message wasn't sent properly
+  @retval false The message was sent to the client
+  @retval true  An error occurred and the message wasn't sent properly
 */
 
 bool net_send_error(NET *net, uint sql_errno, const char *err) {
@@ -668,7 +667,7 @@ bool net_send_error(NET *net, uint sql_errno, const char *err) {
   @page page_protocol_basic_ok_packet OK_Packet
 
   An OK packet is sent from the server to the client to signal successful
-  completion of a command. As of MySQL 5.7.5, OK packes are also used to
+  completion of a command. As of MySQL 5.7.5, OK packets are also used to
   indicate EOF, and EOF packets are deprecated.
 
   if ::CLIENT_PROTOCOL_41 is set, the packet contains a warning count.
@@ -853,9 +852,8 @@ bool net_send_error(NET *net, uint sql_errno, const char *err) {
   @param eof_identifier          when true [FE] will be set in OK header
                                  else [00] will be used
 
-  @return
-    @retval false The message was successfully sent
-    @retval true An error occurred and the messages wasn't sent properly
+  @retval false The message was successfully sent
+  @retval true An error occurred and the messages wasn't sent properly
 */
 
 static bool net_send_ok(THD *thd, uint server_status, uint statement_warn_count,
@@ -1046,9 +1044,8 @@ static uchar eof_buff[1] = {(uchar)254}; /* Marker for end of fields */
   @param server_status          The server status
   @param statement_warn_count   Total number of warnings
 
-  @return
-    @retval false The message was successfully sent
-    @retval true An error occurred and the message wasn't sent properly
+  @retval false The message was successfully sent
+  @retval true An error occurred and the message wasn't sent properly
 */
 
 static bool net_send_eof(THD *thd, uint server_status,
@@ -1057,7 +1054,7 @@ static bool net_send_eof(THD *thd, uint server_status,
   bool error = false;
   DBUG_TRACE;
   /* Set to true if no active vio, to work well in case of --init-file */
-  if (net->vio != 0) {
+  if (net->vio != nullptr) {
     thd->get_stmt_da()->set_overwrite_status(true);
     error = write_eof_packet(thd, net, server_status, statement_warn_count);
     if (!error) error = net_flush(net);
@@ -1079,9 +1076,8 @@ static bool net_send_eof(THD *thd, uint server_status,
   @param statement_warn_count The number of warnings
 
 
-  @return
-    @retval false The message was sent successfully
-    @retval true An error occurred and the messages wasn't sent properly
+  @retval false The message was sent successfully
+  @retval true An error occurred and the messages wasn't sent properly
 */
 
 static bool write_eof_packet(THD *thd, NET *net, uint server_status,
@@ -1167,9 +1163,8 @@ static bool write_eof_packet(THD *thd, NET *net, uint server_status,
   @param err          A pointer to the error message
   @param sqlstate     SQL state
 
-  @return
-   @retval false The message was successfully sent
-   @retval true  An error occurred and the messages wasn't sent properly
+  @retval false The message was successfully sent
+  @retval true  An error occurred and the messages wasn't sent properly
 
   See also @ref page_protocol_basic_err_packet
 */
@@ -1192,9 +1187,8 @@ static bool net_send_error_packet(THD *thd, uint sql_errno, const char *err,
   @param client_capabilities    Client capabilities flag
   @param character_set_results  Char set info
 
-  @return
-   @retval false The message was successfully sent
-   @retval true  An error occurred and the messages wasn't sent properly
+  @retval false The message was successfully sent
+  @retval true  An error occurred and the messages wasn't sent properly
 
   See also @ref page_protocol_basic_err_packet
 */
@@ -1213,7 +1207,7 @@ static bool net_send_error_packet(NET *net, uint sql_errno, const char *err,
 
   DBUG_TRACE;
 
-  if (net->vio == 0) {
+  if (net->vio == nullptr) {
     if (bootstrap) {
       /* In bootstrap it's ok to print on stderr */
       my_message_local(ERROR_LEVEL, EE_NET_SEND_ERROR_IN_BOOTSTRAP, sql_errno,
@@ -1282,7 +1276,7 @@ void Protocol_classic::init(THD *thd_arg) {
   m_thd = thd_arg;
   packet = &m_thd->packet;
 #ifndef DBUG_OFF
-  field_types = 0;
+  field_types = nullptr;
 #endif
 }
 
@@ -1328,8 +1322,8 @@ bool Protocol_classic::send_eof(uint server_status, uint statement_warn_count) {
   if (has_client_capability(CLIENT_DEPRECATE_EOF) &&
       (m_thd->get_command() != COM_BINLOG_DUMP &&
        m_thd->get_command() != COM_BINLOG_DUMP_GTID))
-    retval = net_send_ok(m_thd, server_status, statement_warn_count, 0, 0, NULL,
-                         true);
+    retval = net_send_ok(m_thd, server_status, statement_warn_count, 0, 0,
+                         nullptr, true);
   else
     retval = net_send_eof(m_thd, server_status, statement_warn_count);
   // Reclaim some memory
@@ -1366,14 +1360,14 @@ bool Protocol_classic::init_net(Vio *vio) {
   return my_net_init(&m_thd->net, vio);
 }
 
-void Protocol_classic::claim_memory_ownership() {
-  net_claim_memory_ownership(&m_thd->net);
+void Protocol_classic::claim_memory_ownership(bool claim) {
+  net_claim_memory_ownership(&m_thd->net, claim);
 }
 
 void Protocol_classic::end_net() {
   DBUG_ASSERT(m_thd->net.buff);
   net_end(&m_thd->net);
-  m_thd->net.vio = NULL;
+  m_thd->net.vio = nullptr;
 }
 
 bool Protocol_classic::write(const uchar *ptr, size_t len) {
@@ -1895,7 +1889,7 @@ int Protocol_classic::read_packet() {
   @return @ref page_protocol_basic_err_packet or
     @ref page_protocol_basic_ok_packet
 
-  @sa mysql_dump_debug_info, dispatch_command, mysql_print_status
+  @sa mysql_dump_debug_info, dispatch_command
 */
 
 /**
@@ -2571,6 +2565,11 @@ int Protocol_classic::read_packet() {
 
   Fetches the requested amount of rows from
   a resultset produced by ::COM_STMT_EXECUTE
+*/
+MY_COMPILER_DIAGNOSTIC_PUSH()
+MY_COMPILER_CLANG_WORKAROUND_REF_DOCBUG()
+/**
+  @page page_protocol_com_stmt_fetch COM_STMT_FETCH
 
   @return @ref sect_protocol_com_stmt_fetch_response
   <table>
@@ -2587,11 +2586,16 @@ int Protocol_classic::read_packet() {
       <td>max number of rows to return</td></tr>
   </table>
 
-  @sa ::mysqld_stmt_fetch, ::mysql_stmt_fetch
+  @sa @ref mysqld_stmt_fetch
+  @sa @ref mysql_stmt_fetch
+*/
+MY_COMPILER_DIAGNOSTIC_POP()
+/**
+  @page page_protocol_com_stmt_fetch COM_STMT_FETCH
 
   @section sect_protocol_com_stmt_fetch_response COM_STMT_FETCH Response
 
-  ::COM_STMT_FETCH may return one of:
+  @ref COM_STMT_FETCH may return one of:
     - @ref sect_protocol_command_phase_sp_multi_resultset
     - @ref page_protocol_basic_err_packet
 */
@@ -2703,10 +2707,16 @@ bool Protocol_classic::parse_packet(union COM_DATA *data,
           continue;
         }
         enum enum_field_types type =
-            has_new_types ? params[i].type : stmt->param_array[i]->data_type();
-        if (stmt->param_array[i]->state == Item_param::LONG_DATA_VALUE) {
+            has_new_types ? params[i].type
+                          : stmt->param_array[i]->data_type_actual();
+        if (type == MYSQL_TYPE_BOOL)
+          goto malformed;  // unsupported in this version of the Server
+        if (stmt->param_array[i]->param_state() ==
+            Item_param::LONG_DATA_VALUE) {
           DBUG_PRINT("info", ("long data"));
-          if (!((type >= MYSQL_TYPE_TINY_BLOB) && (type <= MYSQL_TYPE_STRING)))
+          if (!(type >= MYSQL_TYPE_TINY_BLOB && type <= MYSQL_TYPE_STRING))
+            goto malformed;
+          if (type == MYSQL_TYPE_BOOL || type == MYSQL_TYPE_INVALID)
             goto malformed;
           data->com_stmt_execute.parameter_count++;
 
@@ -2936,7 +2946,7 @@ bool Protocol_classic::start_result_metadata(uint num_cols_arg, uint flags,
     field_types =
         (enum_field_types *)m_thd->alloc(sizeof(field_types) * num_cols);
   else
-    field_types = 0;
+    field_types = nullptr;
   count = 0;
 #endif
 
@@ -3094,6 +3104,8 @@ bool Protocol_classic::send_field_metadata(Send_field *field,
   const CHARSET_INFO *cs = system_charset_info;
   const CHARSET_INFO *thd_charset = m_thd->variables.character_set_results;
 
+  DBUG_ASSERT(field->type != MYSQL_TYPE_BOOL);
+
   /* Keep things compatible for old clients */
   if (field->type == MYSQL_TYPE_VARCHAR) field->type = MYSQL_TYPE_VAR_STRING;
 
@@ -3115,7 +3127,7 @@ bool Protocol_classic::send_field_metadata(Send_field *field,
     *pos++ = 12;  // Length of packed fields
     /* inject a NULL to test the client */
     DBUG_EXECUTE_IF("poison_rs_fields", pos[-1] = (char)0xfb;);
-    if (item_charset == &my_charset_bin || thd_charset == NULL) {
+    if (item_charset == &my_charset_bin || thd_charset == nullptr) {
       /* No conversion */
       int2store(pos, item_charset->number);
       int4store(pos + 2, field->length);
@@ -3181,9 +3193,8 @@ bool Protocol_classic::send_field_metadata(Send_field *field,
 
 bool Protocol_classic::end_row() {
   DBUG_TRACE;
-  if (m_thd->get_protocol()->connection_alive())
-    return my_net_write(&m_thd->net, (uchar *)packet->ptr(), packet->length());
-  return false;
+  return my_net_write(&m_thd->net, pointer_cast<uchar *>(packet->ptr()),
+                      packet->length());
 }
 
 /**
@@ -3288,7 +3299,7 @@ static bool store_integer(int64 value, bool unsigned_flag, uint32 zerofill,
 
 bool Protocol_text::store_tiny(longlong from, uint32 zerofill) {
   // field_types check is needed because of the embedded protocol
-  DBUG_ASSERT(send_metadata || field_types == 0 ||
+  DBUG_ASSERT(send_metadata || field_types == nullptr ||
               field_types[field_pos] == MYSQL_TYPE_TINY);
   field_pos++;
   return store_integer(from, false, zerofill, packet);
@@ -3296,7 +3307,7 @@ bool Protocol_text::store_tiny(longlong from, uint32 zerofill) {
 
 bool Protocol_text::store_short(longlong from, uint32 zerofill) {
   // field_types check is needed because of the embedded protocol
-  DBUG_ASSERT(send_metadata || field_types == 0 ||
+  DBUG_ASSERT(send_metadata || field_types == nullptr ||
               field_types[field_pos] == MYSQL_TYPE_YEAR ||
               field_types[field_pos] == MYSQL_TYPE_SHORT);
   field_pos++;
@@ -3305,17 +3316,17 @@ bool Protocol_text::store_short(longlong from, uint32 zerofill) {
 
 bool Protocol_text::store_long(longlong from, uint32 zerofill) {
   // field_types check is needed because of the embedded protocol
-  DBUG_ASSERT(send_metadata || field_types == 0 ||
+  DBUG_ASSERT(send_metadata || field_types == nullptr ||
               field_types[field_pos] == MYSQL_TYPE_INT24 ||
               field_types[field_pos] == MYSQL_TYPE_LONG);
   field_pos++;
-  return store_integer(from, from >= 0, zerofill, packet);
+  return store_integer(from, false, zerofill, packet);
 }
 
 bool Protocol_text::store_longlong(longlong from, bool unsigned_flag,
                                    uint32 zerofill) {
   // field_types check is needed because of the embedded protocol
-  DBUG_ASSERT(send_metadata || field_types == 0 ||
+  DBUG_ASSERT(send_metadata || field_types == nullptr ||
               field_types[field_pos] == MYSQL_TYPE_LONGLONG);
   field_pos++;
   return store_integer(from, unsigned_flag, zerofill, packet);
@@ -3323,7 +3334,7 @@ bool Protocol_text::store_longlong(longlong from, bool unsigned_flag,
 
 bool Protocol_text::store_decimal(const my_decimal *d, uint prec, uint dec) {
   // field_types check is needed because of the embedded protocol
-  DBUG_ASSERT(send_metadata || field_types == 0 ||
+  DBUG_ASSERT(send_metadata || field_types == nullptr ||
               field_types[field_pos] == MYSQL_TYPE_NEWDECIMAL);
   field_pos++;
 
@@ -3397,7 +3408,7 @@ static bool store_floating_point(double value, uint32 decimals, uint32 zerofill,
 
 bool Protocol_text::store_float(float from, uint32 decimals, uint32 zerofill) {
   // field_types check is needed because of the embedded protocol
-  DBUG_ASSERT(send_metadata || field_types == 0 ||
+  DBUG_ASSERT(send_metadata || field_types == nullptr ||
               field_types[field_pos] == MYSQL_TYPE_FLOAT);
   field_pos++;
   return store_floating_point(from, decimals, zerofill, MY_GCVT_ARG_FLOAT,
@@ -3407,7 +3418,7 @@ bool Protocol_text::store_float(float from, uint32 decimals, uint32 zerofill) {
 bool Protocol_text::store_double(double from, uint32 decimals,
                                  uint32 zerofill) {
   // field_types check is needed because of the embedded protocol
-  DBUG_ASSERT(send_metadata || field_types == 0 ||
+  DBUG_ASSERT(send_metadata || field_types == nullptr ||
               field_types[field_pos] == MYSQL_TYPE_DOUBLE);
   field_pos++;
   return store_floating_point(from, decimals, zerofill, MY_GCVT_ARG_DOUBLE,
@@ -3436,7 +3447,7 @@ static bool store_temporal(ToString to_string, String *packet) {
 
 bool Protocol_text::store_datetime(const MYSQL_TIME &tm, uint decimals) {
   // field_types check is needed because of the embedded protocol
-  DBUG_ASSERT(send_metadata || field_types == 0 ||
+  DBUG_ASSERT(send_metadata || field_types == nullptr ||
               is_temporal_type_with_date_and_time(field_types[field_pos]));
   field_pos++;
   return store_temporal(
@@ -3448,7 +3459,7 @@ bool Protocol_text::store_datetime(const MYSQL_TIME &tm, uint decimals) {
 
 bool Protocol_text::store_date(const MYSQL_TIME &tm) {
   // field_types check is needed because of the embedded protocol
-  DBUG_ASSERT(send_metadata || field_types == 0 ||
+  DBUG_ASSERT(send_metadata || field_types == nullptr ||
               field_types[field_pos] == MYSQL_TYPE_DATE);
   field_pos++;
   return store_temporal([&tm](char *to) { return my_date_to_str(tm, to); },
@@ -3457,7 +3468,7 @@ bool Protocol_text::store_date(const MYSQL_TIME &tm) {
 
 bool Protocol_text::store_time(const MYSQL_TIME &tm, uint decimals) {
   // field_types check is needed because of the embedded protocol
-  DBUG_ASSERT(send_metadata || field_types == 0 ||
+  DBUG_ASSERT(send_metadata || field_types == nullptr ||
               field_types[field_pos] == MYSQL_TYPE_TIME);
   field_pos++;
   return store_temporal(
@@ -3488,18 +3499,17 @@ bool Protocol_binary::send_parameters(List<Item_param> *parameters,
     // The client does not support OUT-parameters.
     return false;
 
-  List<Item> out_param_lst;
+  mem_root_deque<Item *> out_param_lst(current_thd->mem_root);
   Item_param *item_param;
   while ((item_param = item_param_it++)) {
     // Skip it as it's just an IN-parameter.
     if (!item_param->get_out_param_info()) continue;
 
-    if (out_param_lst.push_back(item_param))
-      return true; /* purecov: inspected */
+    out_param_lst.push_back(item_param);
   }
 
   // Empty list
-  if (!out_param_lst.elements) return false;
+  if (out_param_lst.empty()) return false;
 
   /*
     We have to set SERVER_PS_OUT_PARAMS in THD::server_status, because it
@@ -3508,13 +3518,13 @@ bool Protocol_binary::send_parameters(List<Item_param> *parameters,
   m_thd->server_status |= SERVER_PS_OUT_PARAMS | SERVER_MORE_RESULTS_EXISTS;
 
   // Send meta-data.
-  if (m_thd->send_result_metadata(&out_param_lst,
+  if (m_thd->send_result_metadata(out_param_lst,
                                   Protocol::SEND_NUM_ROWS | Protocol::SEND_EOF))
     return true;
 
   // Send data.
   start_row();
-  if (m_thd->send_result_set_row(&out_param_lst)) return true;
+  if (m_thd->send_result_set_row(out_param_lst)) return true;
   if (end_row()) return true;
 
   // Restore THD::server_status.
@@ -3557,7 +3567,7 @@ bool Protocol_text::send_parameters(List<Item_param> *parameters, bool) {
     if (!item_param->get_out_param_info()) continue;
 
     Item_func_set_user_var *suv =
-        new Item_func_set_user_var(*user_var_name, item_param, false);
+        new Item_func_set_user_var(*user_var_name, item_param);
     /*
       Item_func_set_user_var is not fixed after construction,
       call fix_fields().
@@ -3890,6 +3900,7 @@ static ulong get_ps_param_len(enum enum_field_types type, uchar *packet,
   *header_len = 0;
 
   switch (type) {
+    case MYSQL_TYPE_BOOL:
     case MYSQL_TYPE_TINY:
       *err = (packet_left_len < 1);
       return 1;

@@ -1,4 +1,4 @@
-# Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2011, 2020, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -74,6 +74,7 @@ FOREACH(warning
     "missing-field-initializers"
     "unused-parameter"
     "cast-qual"
+    "suggest-override"
     )
   MY_CHECK_CXX_COMPILER_WARNING("${warning}" HAS_WARN_FLAG)
   IF(HAS_WARN_FLAG)
@@ -287,8 +288,6 @@ IF(APPLE)
 ENDIF()
 
 IF(APPLE AND HAVE_CRYPTO_DYLIB AND HAVE_OPENSSL_DYLIB)
-  ADD_DEPENDENCIES(ndb_engine copy_openssl_dlls)
-
   ADD_CUSTOM_COMMAND(TARGET ndb_engine POST_BUILD
     COMMAND install_name_tool -change
     "${CRYPTO_VERSION}" "@loader_path/${CRYPTO_VERSION}"
